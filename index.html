@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BulkBG — Batch Background Removal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0a0a0c;
+      --surface:  #13131a;
+      --surface2: #1c1c26;
+      --border:   #28283a;
+      --accent:   #f0c040;
+      --accent2:  #ff6b35;
+      --text:     #e4e4f0;
+      --muted:    #5a5a72;
+      --success:  #3ddc84;
+      --danger:   #ff4d6a;
+      --warn:     #ffaa40;
+      --font-h:   'Syne', sans-serif;
+      --font-m:   'JetBrains Mono', monospace;
+    }
+
+    html, body {
+      height: 100%; background: var(--bg); color: var(--text);
+      font-family: var(--font-h); overflow: hidden;
+    }
+
+    #app {
+      display: grid;
+      grid-template-rows: auto 1fr;
+      grid-template-columns: 380px 1fr;
+      grid-template-areas: "header header" "sidebar main";
+      height: 100vh;
+    }
+
+    /* ── HEADER ── */
+    header {
+      grid-area: header;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 28px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .logo {
+      display: flex; align-items: center; gap: 12px;
+      font-size: 22px; font-weight: 800; letter-spacing: -0.5px;
+    }
+    .logo-mark {
+      width: 32px; height: 32px; border-radius: 8px;
+      background: var(--accent); display: flex; align-items: center;
+      justify-content: center; font-size: 16px; color: #0a0a0c;
+      font-weight: 800; flex-shrink: 0;
+    }
+    .logo-sub {
+      font-family: var(--font-m); font-size: 10px; font-weight: 400;
+      color: var(--muted); letter-spacing: 2px; text-transform: uppercase;
+      display: block; margin-top: 2px;
+    }
+    .header-stats {
+      display: flex; gap: 24px; align-items: center;
+    }
+    .stat {
+      text-align: right;
+      font-family: var(--font-m); font-size: 11px; color: var(--muted);
+      letter-spacing: .5px;
+    }
+    .stat-val {
+      display: block; font-size: 20px; font-weight: 700;
+      color: var(--text); letter-spacing: -0.5px; line-height: 1.1;
+    }
+    .stat-val.success { color: var(--success); }
+    .stat-val.danger  { color: var(--danger); }
+    .stat-val.warn    { color: var(--warn); }
+
+    /* ── SIDEBAR ── */
+    aside {
+      grid-area: sidebar;
+      border-right: 1px solid var(--border);
+      background: var(--surface);
+      display: flex; flex-direction: column;
+      overflow: hidden;
+    }
+
+    .panel {
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--border);
+    }
+    .panel-title {
+      font-family: var(--font-m); font-size: 10px; font-weight: 700;
+      letter-spacing: 2px; text-transform: uppercase;
+      color: var(--muted); margin-bottom: 14px;
+    }
+
+    /* Drop zone */
+    #drop-zone {
+      border: 2px dashed var(--border);
+      border-radius: 10px; padding: 28px 20px;
+      text-align: center; cursor: pointer;
+      transition: border-color .2s, background .2s;
+      position: relative;
+    }
+    #drop-zone:hover, #drop-zone.drag-over {
+      border-color: var(--accent);
+      background: rgba(240,192,64,.05);
+    }
+    #drop-zone input[type=file] {
+      position: absolute; inset: 0; opacity: 0; cursor: pointer;
+    }
+    .drop-icon { font-size: 32px; margin-bottom: 10px; display: block; }
+    .drop-title {
+      font-size: 14px; font-weight: 700; margin-bottom: 4px; color: var(--text);
+    }
+    .drop-sub {
+      font-family: var(--font-m); font-size: 10px; color: var(--muted);
+      letter-spacing: .5px;
+    }
+
+    /* Options */
+    .option-row {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .option-row:last-child { margin-bottom: 0; }
+    .option-label {
+      font-family: var(--font-m); font-size: 11px;
+      color: var(--muted); letter-spacing: .5px;
+    }
+    select {
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 6px; color: var(--text);
+      font-family: var(--font-m); font-size: 11px;
+      padding: 6px 10px; outline: none; cursor: pointer;
+      transition: border-color .2s;
+    }
+    select:focus { border-color: var(--accent); }
+
+    /* Output folder */
+    .folder-btn {
+      width: 100%; padding: 11px 14px;
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 8px; color: var(--text);
+      font-family: var(--font-m); font-size: 11px;
+      cursor: pointer; text-align: left;
+      transition: border-color .2s; letter-spacing: .3px;
+      display: flex; align-items: center; gap: 8px;
+      white-space: nowrap; overflow: hidden;
+    }
+    .folder-btn:hover { border-color: var(--accent); }
+    .folder-btn span { overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
+    .folder-btn.selected span { color: var(--accent); }
+
+    /* Action buttons */
+    .btn-start {
+      width: 100%; padding: 15px;
+      background: var(--accent); border: none; border-radius: 8px;
+      color: #0a0a0c; font-family: var(--font-h);
+      font-size: 15px; font-weight: 800;
+      cursor: pointer; letter-spacing: .3px;
+      transition: opacity .2s, transform .1s;
+    }
+    .btn-start:hover:not(:disabled) { opacity: .88; }
+    .btn-start:active { transform: scale(.98); }
+    .btn-start:disabled { opacity: .35; cursor: not-allowed; }
+
+    .btn-clear {
+      width: 100%; padding: 10px;
+      background: transparent; border: 1px solid var(--border);
+      border-radius: 8px; color: var(--muted);
+      font-family: var(--font-h); font-size: 13px; font-weight: 600;
+      cursor: pointer; margin-top: 8px;
+      transition: border-color .2s, color .2s;
+    }
+    .btn-clear:hover { border-color: var(--danger); color: var(--danger); }
+
+    /* Queue list in sidebar */
+    .queue-wrap {
+      flex: 1; overflow-y: auto; padding: 0;
+    }
+    .queue-wrap::-webkit-scrollbar { width: 4px; }
+    .queue-wrap::-webkit-scrollbar-track { background: transparent; }
+    .queue-wrap::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    .queue-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 20px;
+      border-bottom: 1px solid rgba(40,40,58,.6);
+      font-family: var(--font-m); font-size: 11px;
+      transition: background .15s;
+    }
+    .queue-item:hover { background: var(--surface2); }
+    .queue-item-thumb {
+      width: 32px; height: 32px; border-radius: 4px;
+      object-fit: cover; flex-shrink: 0;
+      background: var(--surface2); border: 1px solid var(--border);
+    }
+    .queue-item-info { flex: 1; min-width: 0; }
+    .queue-item-name {
+      color: var(--text); white-space: nowrap;
+      overflow: hidden; text-overflow: ellipsis;
+      letter-spacing: .2px; margin-bottom: 2px;
+    }
+    .queue-item-path {
+      color: var(--muted); font-size: 9px; letter-spacing: .3px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .queue-status {
+      flex-shrink: 0; width: 8px; height: 8px;
+      border-radius: 50%; background: var(--border);
+    }
+    .queue-status.pending   { background: var(--muted); }
+    .queue-status.processing {
+      background: var(--accent);
+      box-shadow: 0 0 6px var(--accent);
+      animation: pulse 1s ease-in-out infinite;
+    }
+    .queue-status.done    { background: var(--success); }
+    .queue-status.failed  { background: var(--danger); }
+    .queue-status.retrying { background: var(--warn); animation: pulse 1s ease-in-out infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+    /* ── MAIN ── */
+    main {
+      grid-area: main;
+      display: flex; flex-direction: column;
+      overflow: hidden; background: var(--bg);
+    }
+
+    /* Progress bar */
+    .progress-bar-wrap {
+      height: 3px; background: var(--surface2); flex-shrink: 0;
+    }
+    .progress-bar-fill {
+      height: 100%; width: 0%;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      transition: width .3s ease;
+    }
+
+    /* Current file */
+    .current-wrap {
+      padding: 20px 28px 16px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0; min-height: 72px;
+      display: flex; align-items: center; gap: 16px;
+    }
+    .current-label {
+      font-family: var(--font-m); font-size: 10px;
+      letter-spacing: 2px; text-transform: uppercase;
+      color: var(--muted); flex-shrink: 0;
+    }
+    .current-file {
+      font-family: var(--font-m); font-size: 13px;
+      color: var(--accent); letter-spacing: .3px;
+      flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .current-model {
+      font-family: var(--font-m); font-size: 10px;
+      color: var(--muted); letter-spacing: 1px; flex-shrink: 0;
+    }
+
+    /* Log */
+    .log-header {
+      padding: 12px 28px 10px;
+      display: flex; align-items: center; justify-content: space-between;
+      flex-shrink: 0;
+    }
+    .log-title {
+      font-family: var(--font-m); font-size: 10px; font-weight: 700;
+      letter-spacing: 2px; text-transform: uppercase; color: var(--muted);
+    }
+    .btn-dl-log {
+      background: transparent; border: 1px solid var(--border);
+      border-radius: 5px; color: var(--muted);
+      font-family: var(--font-m); font-size: 10px; letter-spacing: .5px;
+      padding: 4px 10px; cursor: pointer;
+      transition: border-color .2s, color .2s;
+    }
+    .btn-dl-log:hover { border-color: var(--accent); color: var(--accent); }
+
+    #log {
+      flex: 1; overflow-y: auto;
+      padding: 0 28px 20px;
+      font-family: var(--font-m); font-size: 11px;
+      line-height: 1.7; letter-spacing: .3px;
+    }
+    #log::-webkit-scrollbar { width: 4px; }
+    #log::-webkit-scrollbar-track { background: transparent; }
+    #log::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    .log-line {
+      display: flex; gap: 10px; align-items: baseline;
+      padding: 3px 0; border-bottom: 1px solid rgba(40,40,58,.3);
+    }
+    .log-time { color: var(--muted); flex-shrink: 0; font-size: 10px; }
+    .log-msg  { flex: 1; }
+    .log-msg.ok      { color: var(--success); }
+    .log-msg.err     { color: var(--danger); }
+    .log-msg.warn    { color: var(--warn); }
+    .log-msg.info    { color: var(--text); }
+    .log-msg.muted   { color: var(--muted); }
+
+    .empty-state {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 12px; color: var(--muted);
+      font-family: var(--font-m); font-size: 12px; letter-spacing: .5px;
+    }
+    .empty-icon { font-size: 48px; opacity: .3; }
+  </style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="logo">
+      <div class="logo-mark">B</div>
+      <div>
+        BulkBG
+        <span class="logo-sub">Batch Background Removal</span>
+      </div>
+    </div>
+    <div class="header-stats">
+      <div class="stat"><span class="stat-val" id="stat-total">0</span>Queued</div>
+      <div class="stat"><span class="stat-val success" id="stat-done">0</span>Done</div>
+      <div class="stat"><span class="stat-val danger" id="stat-failed">0</span>Failed</div>
+    </div>
+  </header>
+
+  <aside>
+    <!-- Drop zone -->
+    <div class="panel">
+      <div class="panel-title">Input</div>
+      <div id="drop-zone">
+        <input type="file" id="file-input" multiple accept="image/*" />
+        <span class="drop-icon">📂</span>
+        <div class="drop-title">Drop files or folders here</div>
+        <div class="drop-sub">JPG · PNG · WEBP · or click to browse</div>
+      </div>
+    </div>
+
+    <!-- Options -->
+    <div class="panel">
+      <div class="panel-title">Options</div>
+      <div class="option-row">
+        <span class="option-label">Model</span>
+        <select id="model-select">
+          <option value="isnet_fp16">isnet_fp16 — fast (default)</option>
+          <option value="isnet">isnet — full quality</option>
+          <option value="isnet_quint8">isnet_quint8 — fastest</option>
+        </select>
+      </div>
+      <div class="option-row">
+        <span class="option-label">Output format</span>
+        <select id="format-select">
+          <option value="png">PNG (transparent)</option>
+          <option value="webp">WebP (smaller)</option>
+        </select>
+      </div>
+
+    </div>
+
+    <!-- Output folder -->
+    <div class="panel">
+      <div class="panel-title">Output Folder</div>
+      <button class="folder-btn" id="folder-btn">
+        📁 <span id="folder-label">Click to choose output folder…</span>
+      </button>
+    </div>
+
+    <!-- Actions -->
+    <div class="panel">
+      <button class="btn-start" id="start-btn" disabled>▶ Start Processing</button>
+      <button class="btn-clear" id="clear-btn">✕ Clear Queue</button>
+    </div>
+
+    <!-- Queue -->
+    <div class="queue-wrap" id="queue-list"></div>
+  </aside>
+
+  <main>
+    <div class="progress-bar-wrap">
+      <div class="progress-bar-fill" id="progress-bar"></div>
+    </div>
+    <div class="current-wrap">
+      <span class="current-label">Processing</span>
+      <span class="current-file" id="current-file">—</span>
+      <span class="current-model" id="current-model"></span>
+    </div>
+    <div class="log-header">
+      <span class="log-title">Activity Log</span>
+      <button class="btn-dl-log" id="dl-log-btn">⬇ Download Log</button>
+    </div>
+    <div id="log">
+      <div class="empty-state" id="empty-state">
+        <div class="empty-icon">🪵</div>
+        <div>Log will appear here during processing</div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script type="module">
+  import { removeBackground } from 'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.7.0/+esm';
+
+  // ── State ─────────────────────────────────────────────────
+  let queue       = [];   // { id, file, relativePath, status, retries }
+  let outputDir   = null;
+  let running     = false;
+  let statDone    = 0;
+  let statFailed  = 0;
+  let logLines    = [];
+
+  // ── DOM ───────────────────────────────────────────────────
+  const dropZone      = document.getElementById('drop-zone');
+  const fileInput     = document.getElementById('file-input');
+  const folderBtn     = document.getElementById('folder-btn');
+  const folderLabel   = document.getElementById('folder-label');
+  const startBtn      = document.getElementById('start-btn');
+  const clearBtn      = document.getElementById('clear-btn');
+  const queueList     = document.getElementById('queue-list');
+  const progressBar   = document.getElementById('progress-bar');
+  const currentFile   = document.getElementById('current-file');
+  const currentModel  = document.getElementById('current-model');
+  const logEl         = document.getElementById('log');
+  const emptyState    = document.getElementById('empty-state');
+  const dlLogBtn      = document.getElementById('dl-log-btn');
+  const statTotal     = document.getElementById('stat-total');
+  const statDoneEl    = document.getElementById('stat-done');
+  const statFailedEl  = document.getElementById('stat-failed');
+  const modelSelect   = document.getElementById('model-select');
+  const formatSelect  = document.getElementById('format-select');
+
+
+  // ── Logging ───────────────────────────────────────────────
+  function log(msg, type = 'info') {
+    const now = new Date();
+    const ts  = now.toTimeString().slice(0,8);
+    logLines.push(`[${ts}] ${msg}`);
+    if (emptyState) emptyState.remove();
+    const line = document.createElement('div');
+    line.className = 'log-line';
+    line.innerHTML = `<span class="log-time">${ts}</span><span class="log-msg ${type}">${msg}</span>`;
+    logEl.appendChild(line);
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  // ── Drop zone ─────────────────────────────────────────────
+  dropZone.addEventListener('dragover', e => {
+    e.preventDefault();
+    dropZone.classList.add('drag-over');
+  });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+  dropZone.addEventListener('drop', async e => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    const items = [...e.dataTransfer.items];
+    for (const item of items) {
+      if (item.kind !== 'file') continue;
+      const entry = item.webkitGetAsEntry();
+      if (entry) await readEntry(entry, '');
+    }
+    updateUI();
+  });
+
+  fileInput.addEventListener('change', async () => {
+    for (const file of fileInput.files) {
+      if (isImage(file.name)) addToQueue(file, file.name);
+    }
+    fileInput.value = '';
+    updateUI();
+  });
+
+  async function readEntry(entry, path) {
+    if (entry.isFile) {
+      const file = await getFile(entry);
+      if (isImage(file.name)) addToQueue(file, path ? path + '/' + file.name : file.name);
+    } else if (entry.isDirectory) {
+      const reader = entry.createReader();
+      const entries = await readAllEntries(reader);
+      for (const child of entries) {
+        await readEntry(child, path ? path + '/' + entry.name : entry.name);
+      }
+    }
+  }
+
+  function getFile(entry) {
+    return new Promise((res, rej) => entry.file(res, rej));
+  }
+
+  function readAllEntries(reader) {
+    return new Promise((res, rej) => {
+      const all = [];
+      function read() {
+        reader.readEntries(entries => {
+          if (!entries.length) return res(all);
+          all.push(...entries);
+          read();
+        }, rej);
+      }
+      read();
+    });
+  }
+
+  function isImage(name) {
+    return /\.(jpe?g|png|webp|gif|bmp|tiff?)$/i.test(name);
+  }
+
+  // ── Queue management ──────────────────────────────────────
+  let nextId = 0;
+  function addToQueue(file, relativePath) {
+    // Avoid duplicates
+    if (queue.find(q => q.relativePath === relativePath)) return;
+    const id = nextId++;
+    queue.push({ id, file, relativePath, status: 'pending', retries: 0 });
+    renderQueueItem(id, file, relativePath);
+  }
+
+  function renderQueueItem(id, file, relativePath) {
+    const div = document.createElement('div');
+    div.className = 'queue-item';
+    div.id = 'qi-' + id;
+    const thumb = document.createElement('div');
+    thumb.className = 'queue-item-thumb';
+    thumb.textContent = '🖼';
+    thumb.style.cssText = 'display:flex;align-items:center;justify-content:center;font-size:16px;';
+    const info = document.createElement('div');
+    info.className = 'queue-item-info';
+    const parts = relativePath.split('/');
+    const name  = parts.pop();
+    const folder = parts.join('/');
+    info.innerHTML = `<div class="queue-item-name">${name}</div>
+                      <div class="queue-item-path">${folder || '/'}</div>`;
+    const dot = document.createElement('div');
+    dot.className = 'queue-status pending';
+    dot.id = 'qs-' + id;
+    div.appendChild(thumb);
+    div.appendChild(info);
+    div.appendChild(dot);
+    queueList.appendChild(div);
+  }
+
+  function setItemStatus(id, status) {
+    const dot = document.getElementById('qs-' + id);
+    if (dot) dot.className = 'queue-status ' + status;
+    const item = queue.find(q => q.id === id);
+    if (item) item.status = status;
+  }
+
+  function updateUI() {
+    const total = queue.length;
+    statTotal.textContent  = total;
+    statDoneEl.textContent   = statDone;
+    statFailedEl.textContent = statFailed;
+    startBtn.disabled = total === 0 || !outputDir || running;
+    clearBtn.disabled = running;
+  }
+
+  clearBtn.addEventListener('click', () => {
+    if (running) return;
+    queue = [];
+    statDone = statFailed = 0;
+    queueList.innerHTML = '';
+    progressBar.style.width = '0%';
+    currentFile.textContent = '—';
+    currentModel.textContent = '';
+    updateUI();
+    log('Queue cleared.', 'muted');
+  });
+
+  // ── Output folder ─────────────────────────────────────────
+  folderBtn.addEventListener('click', async () => {
+    try {
+      outputDir = await window.showDirectoryPicker({ mode: 'readwrite' });
+      folderLabel.textContent = outputDir.name;
+      folderBtn.classList.add('selected');
+      log('Output folder set: ' + outputDir.name, 'muted');
+      updateUI();
+    } catch (e) {
+      if (e.name !== 'AbortError') log('Could not select folder: ' + e.message, 'err');
+    }
+  });
+
+  // ── Processing ────────────────────────────────────────────
+  startBtn.addEventListener('click', startProcessing);
+
+  async function startProcessing() {
+    if (!outputDir || queue.length === 0 || running) return;
+    running = true;
+    updateUI();
+    const model       = modelSelect.value;
+    const format      = formatSelect.value;
+    const concurrency = 1;
+    const mimeType    = format === 'webp' ? 'image/webp' : 'image/png';
+
+    log(`Starting — ${queue.length} file(s) · model: ${model} · format: ${format}`, 'muted');
+    currentModel.textContent = model.toUpperCase();
+
+    const pending = queue.filter(q => q.status === 'pending');
+    let doneCount = queue.filter(q => q.status === 'done').length;
+    const total   = queue.length;
+
+    // Process with concurrency limit
+    let idx = 0;
+    async function worker() {
+      while (idx < pending.length) {
+        const item = pending[idx++];
+        await processItem(item, model, format, mimeType);
+        doneCount++;
+        progressBar.style.width = Math.round((doneCount / total) * 100) + '%';
+        updateUI();
+      }
+    }
+    const workers = [];
+    for (let i = 0; i < concurrency; i++) workers.push(worker());
+    await Promise.all(workers);
+
+    running = false;
+    currentFile.textContent  = '—';
+    currentModel.textContent = '';
+    log(`Complete — ${statDone} succeeded, ${statFailed} failed.`, statFailed > 0 ? 'warn' : 'ok');
+    updateUI();
+  }
+
+  async function processItem(item, model, format, mimeType) {
+    const MAX_RETRIES = 2;
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        if (attempt > 1) {
+          setItemStatus(item.id, 'retrying');
+          log(`↺ Retrying (${attempt}/${MAX_RETRIES}): ${item.relativePath}`, 'warn');
+        } else {
+          setItemStatus(item.id, 'processing');
+          log(`→ Processing: ${item.relativePath}`, 'info');
+        }
+        currentFile.textContent = item.relativePath;
+
+        const resultBlob = await removeBackground(item.file, { model });
+
+        // Build output path mirroring folder structure
+        const parts      = ('nobg_' + item.relativePath).split('/');
+        // rename file part with nobg_ prefix and new extension
+        const filePart   = parts[parts.length - 1];
+        const baseName   = filePart.replace(/\.[^.]+$/, '') + '.' + format;
+        parts[parts.length - 1] = baseName;
+
+        // Navigate/create folder structure
+        let dir = outputDir;
+        for (let i = 0; i < parts.length - 1; i++) {
+          dir = await dir.getDirectoryHandle(parts[i], { create: true });
+        }
+        const fileName   = parts[parts.length - 1];
+        const fileHandle = await dir.getFileHandle(fileName, { create: true });
+        const writable   = await fileHandle.createWritable();
+
+        // Convert blob to correct format if needed
+        let outBlob = resultBlob;
+        if (format === 'webp') {
+          outBlob = await convertBlob(resultBlob, mimeType);
+        }
+        await writable.write(outBlob);
+        await writable.close();
+
+        setItemStatus(item.id, 'done');
+        statDone++;
+        log(`✓ Saved: ${parts.join('/')}`, 'ok');
+        return; // success — exit retry loop
+
+      } catch (err) {
+        if (attempt === MAX_RETRIES) {
+          setItemStatus(item.id, 'failed');
+          statFailed++;
+          log(`✗ Failed after ${MAX_RETRIES} attempts: ${item.relativePath} — ${err?.message || err?.toString() || 'unknown error'}`, 'err');
+        }
+      }
+    }
+  }
+
+  function convertBlob(blob, mimeType) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const url = URL.createObjectURL(blob);
+      img.onload = () => {
+        const c = document.createElement('canvas');
+        c.width = img.width; c.height = img.height;
+        c.getContext('2d').drawImage(img, 0, 0);
+        URL.revokeObjectURL(url);
+        c.toBlob(b => b ? resolve(b) : reject(new Error('Canvas toBlob failed')), mimeType, 0.92);
+      };
+      img.onerror = reject;
+      img.src = url;
+    });
+  }
+
+  // ── Download log ──────────────────────────────────────────
+  dlLogBtn.addEventListener('click', () => {
+    if (!logLines.length) return;
+    const blob = new Blob([logLines.join('\n')], { type: 'text/plain' });
+    const a    = document.createElement('a');
+    a.href     = URL.createObjectURL(blob);
+    a.download = 'bulkbg-log-' + new Date().toISOString().slice(0,19).replace(/:/g,'-') + '.txt';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  });
+
+  // ── Init ──────────────────────────────────────────────────
+  updateUI();
+</script>
+</body>
+</html>
