@@ -577,6 +577,7 @@
       folderLabel.textContent = outputDir.name;
       folderBtn.classList.add('selected');
       log('Output folder set: ' + outputDir.name, 'muted');
+      await put('outputDirHandle', outputDir);
       updateUI();
     } catch (e) {
       if (e.name !== 'AbortError') log('Could not select folder: ' + e.message, 'err');
@@ -608,6 +609,7 @@
       while (idx < pending.length) {
         const item = pending[idx++];
         await processItem(item, model, format, mimeType);
+        await new Promise(r => setTimeout(r, 50)); // yield to browser
         doneCount++;
         progressBar.style.width = Math.round((doneCount / total) * 100) + '%';
         updateUI();
@@ -704,6 +706,57 @@
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   });
+
+  // ── Persist settings ─────────────────────────────────────
+  // Restore model and format
+  modelSelect.value  = localStorage.getItem('bgModel')  || 'isnet_fp16';
+  formatSelect.value = localStorage.getItem('bgFormat') || 'png';
+  modelSelect.addEventListener('change',  () => localStorage.setItem('bgModel',  modelSelect.value));
+  formatSelect.addEventListener('change', () => localStorage.setItem('bgFormat', formatSelect.value));
+
+  // Restore output folder handle (if browser still has permission)
+  (async () => {
+    try {
+      const stored = await get('outputDirHandle');
+      if (stored) {
+        const perm = await stored.requestPermission({ mode: 'readwrite' });
+        if (perm === 'granted') {
+          outputDir = stored;
+          folderLabel.textContent = stored.name;
+          folderBtn.classList.add('selected');
+          log('Restored output folder: ' + stored.name, 'muted');
+          updateUI();
+        }
+      }
+    } catch (e) { /* no stored handle or permission denied — silent */ }
+  })();
+
+  // Simple IndexedDB helpers for storing the folder handle
+  function openDb() {
+    return new Promise((res, rej) => {
+      const r = indexedDB.open('bulkbg', 1);
+      r.onupgradeneeded = () => r.result.createObjectStore('kv');
+      r.onsuccess = () => res(r.result);
+      r.onerror   = () => rej(r.error);
+    });
+  }
+  async function put(key, value) {
+    const db = await openDb();
+    return new Promise((res, rej) => {
+      const tx = db.transaction('kv', 'readwrite');
+      tx.objectStore('kv').put(value, key);
+      tx.oncomplete = res; tx.onerror = rej;
+    });
+  }
+  async function get(key) {
+    const db = await openDb();
+    return new Promise((res, rej) => {
+      const tx = db.transaction('kv', 'readonly');
+      const r  = tx.objectStore('kv').get(key);
+      r.onsuccess = () => res(r.result);
+      r.onerror   = () => rej(r.error);
+    });
+  }
 
   // ── Init ──────────────────────────────────────────────────
   updateUI();
